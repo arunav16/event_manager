@@ -52,48 +52,74 @@ class UserService:
     @classmethod
     async def create(cls, session: AsyncSession, user_data: Dict[str, str], email_service: EmailService) -> Optional[User]:
         try:
+            # Validate incoming user data using the UserCreate schema.
             validated_data = UserCreate(**user_data).model_dump()
+
+            # Check if a user already exists with this email.
             existing_user = await cls.get_by_email(session, validated_data['email'])
             if existing_user:
                 logger.error("User with given email already exists.")
                 return None
+
+            # Hash the plaintext password.
             validated_data['hashed_password'] = hash_password(validated_data.pop('password'))
+        
+            # Use provided nickname if available; otherwise, generate one.
+            nickname = validated_data.get("nickname")
+            if not nickname:
+                nickname = generate_nickname()
+            if not nickname:
+                raise ValueError("Failed to generate a valid nickname")
+        
+            # If uniqueness is not required, simply use the nickname.
+            validated_data["nickname"] = nickname
+
+            # Create the new user
             new_user = User(**validated_data)
             new_user.verification_token = generate_verification_token()
-            new_nickname = generate_nickname()
-            while await cls.get_by_nickname(session, new_nickname):
-                new_nickname = generate_nickname()
-            new_user.nickname = new_nickname
+
             session.add(new_user)
             await session.commit()
             await email_service.send_verification_email(new_user)
-            
             return new_user
+
         except ValidationError as e:
-            logger.error(f"Validation error during user creation: {e}")
-            return None
+                logger.error(f"Validation error during user creation: {e}")
+                return None
+
 
     @classmethod
     async def update(cls, session: AsyncSession, user_id: UUID, update_data: Dict[str, str]) -> Optional[User]:
         try:
-            # validated_data = UserUpdate(**update_data).dict(exclude_unset=True)
             validated_data = UserUpdate(**update_data).dict(exclude_unset=True)
+
+            # Cast URL fields to str explicitly
+            for url_field in ["profile_picture_url", "linkedin_profile_url", "github_profile_url"]:
+                if url_field in validated_data and validated_data[url_field] is not None:
+                    validated_data[url_field] = str(validated_data[url_field])
 
             if 'password' in validated_data:
                 validated_data['hashed_password'] = hash_password(validated_data.pop('password'))
-            query = update(User).where(User.id == user_id).values(**validated_data).execution_options(synchronize_session="fetch")
+
+            query = (
+                update(User)
+                .where(User.id == user_id)
+                .values(**validated_data)
+                .execution_options(synchronize_session="fetch")
+            )
             await cls._execute_query(session, query)
             updated_user = await cls.get_by_id(session, user_id)
             if updated_user:
-                session.refresh(updated_user)  # Explicitly refresh the updated user object
+                session.refresh(updated_user)
                 logger.info(f"User {user_id} updated successfully.")
                 return updated_user
             else:
                 logger.error(f"User {user_id} not found after update attempt.")
             return None
-        except Exception as e:  # Broad exception handling for debugging
+        except Exception as e:
             logger.error(f"Error during user update: {e}")
             return None
+
 
     @classmethod
     async def delete(cls, session: AsyncSession, user_id: UUID) -> bool:
@@ -175,16 +201,17 @@ class UserService:
         return False
 
     @classmethod
-    async def verify_email_with_token(cls, session: AsyncSession, user_id: UUID, token: str) -> bool:
-        user = await cls.get_by_id(session, user_id)
-        if user and user.verification_token == token:
-            user.email_verified = True
-            user.verification_token = None  # Clear the token once used
-            user.role = UserRole.AUTHENTICATED
-            session.add(user)
-            await session.commit()
-            return True
-        return False
+    async def verify_email_with_token(cls, session: AsyncSession, email: str, token: str) -> bool:
+        user = await cls.get_by_email(session, email)
+        if not user:
+            return False
+        # Validate the token (for example, check expiry, signature, etc.)
+        if user.verification_token != token:
+            return False
+        # Mark the email as verified and save
+        user.email_verified = True
+        await session.commit()
+        return True
 
     @classmethod
     async def count(cls, session: AsyncSession) -> int:

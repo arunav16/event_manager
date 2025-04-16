@@ -143,12 +143,17 @@ async def test_reset_password(db_session, user):
     assert reset_success is True
 
 # Test verifying a user's email
+@pytest.mark.asyncio
 async def test_verify_email_with_token(db_session, user):
-    token = "valid_token_example"  # This should be set in your user setup if it depends on a real token
-    user.verification_token = token  # Simulating setting the token in the database
+    token = "valid_token_example"
+    user.verification_token = token
+    user.email_verified = False
+    db_session.add(user)
     await db_session.commit()
-    result = await UserService.verify_email_with_token(db_session, user.id, token)
-    assert result is True
+
+    result = await UserService.verify_email_with_token(db_session, user.email, token)
+    assert result is True, "Token verification failed"
+
 
 # Test unlocking a user's account
 async def test_unlock_user_account(db_session, locked_user):

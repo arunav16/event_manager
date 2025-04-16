@@ -65,7 +65,9 @@ def test_user_base_nickname_invalid(nickname, user_base_data):
 def test_user_base_url_valid(url, user_base_data):
     user_base_data["profile_picture_url"] = url
     user = UserBase(**user_base_data)
-    assert user.profile_picture_url == url
+    assert (str(user.profile_picture_url) if user.profile_picture_url else None) == url
+
+
 
 # Parametrized tests for URL validation (invalid URLs)
 @pytest.mark.parametrize("url", ["ftp://invalid.com/profile.jpg", "http//invalid", "https//invalid"])
