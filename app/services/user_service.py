@@ -190,16 +190,17 @@ class UserService:
         return False
 
     @classmethod
-    async def verify_email_with_token(cls, session: AsyncSession, user_id: UUID, token: str) -> bool:
-        user = await cls.get_by_id(session, user_id)
-        if user and user.verification_token == token:
-            user.email_verified = True
-            user.verification_token = None  # Clear the token once used
-            user.role = UserRole.AUTHENTICATED
-            session.add(user)
-            await session.commit()
-            return True
-        return False
+    async def verify_email_with_token(cls, session: AsyncSession, email: str, token: str) -> bool:
+        user = await cls.get_by_email(session, email)
+        if not user:
+            return False
+        # Validate the token (for example, check expiry, signature, etc.)
+        if user.verification_token != token:
+            return False
+        # Mark the email as verified and save
+        user.email_verified = True
+        await session.commit()
+        return True
 
     @classmethod
     async def count(cls, session: AsyncSession) -> int:

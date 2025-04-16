@@ -37,7 +37,7 @@ class EmailService:
     async def send_verification_email(self, user: User):
         # Convert the server_base_url to a string before stripping
         base_url = str(settings.server_base_url).rstrip('/')
-        verification_url = f"{base_url}/verify-email/{user.id}/{user.verification_token}"
+        verification_url = f"{base_url}/verify-email/{user.email}/{user.verification_token}"
         await self.send_user_email({
             "name": user.first_name,
             "verification_url": verification_url,
