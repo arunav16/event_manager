@@ -186,7 +186,7 @@ async def list_users(
         total=total_users,
         page=skip // limit + 1,
         size=len(user_responses),
-        links=pagination_links  # Ensure you have appropriate logic to create these links
+        links=[link.dict() for link in pagination_links] # Ensure you have appropriate logic to create these links
     )
 
 
