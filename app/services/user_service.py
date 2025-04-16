@@ -52,18 +52,37 @@ class UserService:
     @classmethod
     async def create(cls, session: AsyncSession, user_data: Dict[str, str], email_service: EmailService) -> Optional[User]:
         try:
+            # Validate incoming user data using the UserCreate schema.
             validated_data = UserCreate(**user_data).model_dump()
+        
+            # Check if a user already exists with this email.
             existing_user = await cls.get_by_email(session, validated_data['email'])
             if existing_user:
                 logger.error("User with given email already exists.")
                 return None
+            
+            # Hash the plaintext password.
             validated_data['hashed_password'] = hash_password(validated_data.pop('password'))
+            
+            # If the client provides a nickname, use it; otherwise generate one.
+            nickname = validated_data.get("nickname")
+            if not nickname:
+                nickname = generate_nickname()
+            if not nickname:  # fail fast if generate_nickname() returns a null/empty value
+                raise ValueError("Failed to generate a valid nickname")
+            
+            # Ensure uniqueness: if nickname exists, generate a new one.
+            while await cls.get_by_nickname(session, nickname):
+                nickname = generate_nickname()
+                if not nickname:
+                    raise ValueError("Failed to generate a unique, valid nickname")
+                    
+            validated_data["nickname"] = nickname
+            
+            # Create the user object.
             new_user = User(**validated_data)
             new_user.verification_token = generate_verification_token()
-            # new_nickname = generate_nickname()
-            # while await cls.get_by_nickname(session, new_nickname):
-            #     new_nickname = generate_nickname()
-            # new_user.nickname = new_nickname
+            
             session.add(new_user)
             await session.commit()
             await email_service.send_verification_email(new_user)
