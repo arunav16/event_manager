@@ -48,6 +48,8 @@ from pydantic import HttpUrl, field_serializer
 
 class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
+    first_name: Optional[str] = Field(None, example="John")
+    last_name: Optional[str] = Field(None, example="Doe")
     nickname: Optional[str] = None
     profile_picture_url: Optional[HttpUrl] = None
     linkedin_profile_url: Optional[HttpUrl] = None
